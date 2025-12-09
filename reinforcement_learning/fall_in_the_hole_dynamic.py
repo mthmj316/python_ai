@@ -6,6 +6,8 @@ Created on Sat Dec  6 13:49:02 2025
 """
 import enum
 import random
+import numpy as np
+import reinforcement_learning as rl
 
 class Action(enum.IntEnum):
     FORWARD = 0
@@ -26,7 +28,7 @@ class StateAction(object):
         state_ctn = self.dim * self.dim
         for i in range(state_ctn):
             
-            state_action = [0,0,0,0]
+            state_action = np.zeros(4)
             self.state_action_map.append(state_action)
             
             # Forward action: only in the last row you cannot move forward
@@ -66,9 +68,17 @@ class FallInTheHole(object):
     def __init__(self, dimension, n_traps):
         self.state_action = StateAction(dimension)
         self.trap_states = random.sample(range(self.state_action.get_state_count()), n_traps)
+        self.state = np.random.randint(self.state_action.get_state_count())
         
-    def is_trap(self, state):
-        return (state in self.trap_states)
+        
+    def is_trap(self):
+        return (self.state in self.trap_states)
+    
+    def is_exit()(self):
+        return (state in [0, self.stateAction.get_state_count() - 1])
+    
+    def reward(self):
+        if self.is_trap()
         
     def train(self, rounds, rl_model):
         self.rounds = rounds

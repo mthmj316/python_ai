@@ -7,6 +7,7 @@ Created on Thu Dec  4 18:29:20 2025
 
 import numpy as np
 import pandas as pd
+import reinforcement_learning as rl
 
 class BernoulliBandit(object):
     def __init__(self, p):
@@ -16,15 +17,58 @@ class BernoulliBandit(object):
         reward = np.random.binomial(n=1, p=self.p)
         return reward
     
+adA = BernoulliBandit(0.004)
+adB = BernoulliBandit(0.016)
+adC = BernoulliBandit(0.02)
+adD = BernoulliBandit(0.028)
+adE = BernoulliBandit(0.031)
+
+
+class BernoulliMABandit(rl.MABandit):
     
+    def __init__(self):
+        
+        self.ads = [adA, adB, adC, adD, adE]
+        self.n_ads = len(self.ads)
+                         
+        self.Q = np.zeros(self.n_ads)
+        self.N = np.zeros(self.n_ads)
+        
+        self.ad_chosen = None
     
-def main():
+    def reward(self):
+        return self.ads[self.ad_chosen].display_add()
     
-    adA = BernoulliBandit(0.004)
-    adB = BernoulliBandit(0.016)
-    adC = BernoulliBandit(0.02)
-    adD = BernoulliBandit(0.028)
-    adE = BernoulliBandit(0.031)
+    def pull(self):
+        self.ad_chosen = np.random.randint(self.n_ads)
+    
+    def increment_N(self):
+        self.N[self.ad_chosen] += 1
+        return self.N[self.ad_chosen]
+    
+    def last_Q(self):
+        return self.Q[self.ad_chosen]
+    
+    def update_Q(self, Qnp1):
+        self.Q[self.ad_chosen] = Qnp1
+        
+    def best_ad(self):
+        
+        print(self.Q)
+        return np.argmax(self.Q)
+        
+def new_way():
+    
+    bmab = BernoulliMABandit()
+    
+    model = rl.ABNModel(1000, bmab)
+    model.apply()
+    
+    best_add_idx = bmab.best_ad()
+        
+    print(f"[New Way] The best performing add is: {chr(ord('A') + best_add_idx)}")
+ 
+def old_way():
     
     ads = [adA, adB, adC, adD, adE]
     
@@ -74,7 +118,8 @@ def main():
     
     best_add_idx = np.argmax(Q)
     
-    print(f"The best performing add is: {chr(ord('A') + best_add_idx)}")
+    print(Q)
+    print(f"[Old Way] The best performing add is: {chr(ord('A') + best_add_idx)}")
     
     '''
     ### PRODUCTION PERIOD
@@ -89,7 +134,14 @@ def main():
     '''
     
     df_reward_comparison = pd.DataFrame(avg_rewards, columns=['A/B/n'])
-    df_reward_comparison.plot()                   
+    df_reward_comparison.plot()     
+    
+    
+def main():
+    
+    old_way();
+    new_way()
+                 
 
 if __name__ == "__main__":
     main()
