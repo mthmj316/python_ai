@@ -23,6 +23,8 @@ class StateAction(object):
         
         self.__init__state_action_map()
         
+        # print("\n".join((",".join(str(i) for i in sublist)) for sublist in self.state_action_map))
+        
     def __init__state_action_map(self):
         
         state_ctn = self.dim * self.dim
@@ -63,32 +65,93 @@ class StateAction(object):
         
         return to_str
     
-class FallInTheHole(object):
+    def get_next_state(self, state, action):
+        
+        if action == Action.FORWARD:
+            return state + self.dim
+        elif action == Action.BACKWARD:
+            return state - self.dim
+        elif action == Action.LEFT:
+            return state - 1
+        else:
+            return state + 1
+    
+class FallInTheHoleABnTesting(rl.MABandit):
     
     def __init__(self, dimension, n_traps):
         self.state_action = StateAction(dimension)
-        self.trap_states = random.sample(range(self.state_action.get_state_count()), n_traps)
-        self.state = np.random.randint(self.state_action.get_state_count())
+        self.trap_states = random.sample(list((num for num in range(self.state_action.get_state_count()) if num not in {0,24})), n_traps)
+        print(self.trap_states)
+        self.state = None
+        self.action = None       
+        self.N = []        
+        for _ in range(self.state_action.get_state_count()):
+            self.N.append(np.zeros(4))
         
+        self.Q = []        
+        for _ in range(self.state_action.get_state_count()):
+            self.Q.append(np.zeros(4))
         
-    def is_trap(self):
-        return (self.state in self.trap_states)
+    def is_trap(self):        
+        state = self.state_action.get_next_state(self.state, self.action)        
+        return (state in self.trap_states)
     
-    def is_exit()(self):
-        return (state in [0, self.stateAction.get_state_count() - 1])
+    def is_exit(self):        
+        state = self.state_action.get_next_state(self.state, self.action)   
+        return (state in [0, self.state_action.get_state_count() - 1])
     
     def reward(self):
-        if self.is_trap()
+        if self.is_trap():
+            return -100
+        elif self.is_exit():
+            return 100
+        else:
+            return 0
         
-    def train(self, rounds, rl_model):
-        self.rounds = rounds
+    def pull(self):        
+        if self.state is None or self.is_round_over():
+            # in case of training start or new training round
+            self.state = np.random.randint(self.state_action.get_state_count())
+        else:
+            # in case a training round is ongoing
+            self.state = self.state_action.get_next_state(self.state, self.action)
         
+        self.action = self.state_action.get_action(self.state)
+        
+    def increment_N(self):
+        self.N[self.state][self.action] += 1        
+        return self.N[self.state][self.action]
+        
+    def last_Q(self):
+        return self.Q[self.state][self.action]
+        
+    def update_Q(self, Qnp1):
+        self.Q[self.state][self.action] = Qnp1
+            
+    def best_ad(self):
+        # Not relevant
+        pass
+        
+    def is_round_over(self):        
+        return (self.is_trap() or self.is_exit()) 
+    
+    def __str__(self):
+        N_as_str = "\n".join((",".join(str(i) for i in sublist)) for sublist in self.N)
+        Q_as_str = "\n".join((",".join(str(i) for i in sublist)) for sublist in self.Q)
+        return Q_as_str #+ "\n" + N_as_str
 
 def main():
     
-    stateAction = StateAction(5)
-    print(stateAction)
-    print(stateAction.get_action(0))
+    dimension = 5
+    n_traps = 3
+    n_tests = 10000
+    
+    bandit = FallInTheHoleABnTesting(dimension, n_traps)
+    
+    abn_model = rl.ABNModel(n_tests, bandit)
+    abn_model.apply()
+    
+    print(bandit)
 
 if __name__ == "__main__":
     main()
