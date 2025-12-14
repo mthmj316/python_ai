@@ -81,7 +81,7 @@ class FallInTheHoleABnTesting(rl.MABandit):
     def __init__(self, dimension, n_traps):
         self.state_action = StateAction(dimension)
         self.trap_states = random.sample(list((num for num in range(self.state_action.get_state_count()) if num not in {0,24})), n_traps)
-        print(self.trap_states)
+        # print(self.trap_states)
         self.state = None
         self.action = None       
         self.N = []        
@@ -91,6 +91,15 @@ class FallInTheHoleABnTesting(rl.MABandit):
         self.Q = []        
         for _ in range(self.state_action.get_state_count()):
             self.Q.append(np.zeros(4))
+    
+    def get_state_count(self):#
+        return self.state_action.get_state_count()
+    
+    def get_trap_states(self):
+        return self.trap_states
+    
+    def get_Q(self):
+        return self.Q
         
     def is_trap(self):        
         state = self.state_action.get_next_state(self.state, self.action)        
@@ -101,12 +110,17 @@ class FallInTheHoleABnTesting(rl.MABandit):
         return (state in [0, self.state_action.get_state_count() - 1])
     
     def reward(self):
+        
+        reward = 0
+        
         if self.is_trap():
-            return -100
+            reward = 0.0 #-100
         elif self.is_exit():
-            return 100
+            reward = 1
         else:
-            return 0
+            reward = 0.5
+            
+        return np.random.binomial(n=1, p=reward)
         
     def pull(self):        
         if self.state is None or self.is_round_over():
@@ -138,7 +152,66 @@ class FallInTheHoleABnTesting(rl.MABandit):
     def __str__(self):
         N_as_str = "\n".join((",".join(str(i) for i in sublist)) for sublist in self.N)
         Q_as_str = "\n".join((",".join(str(i) for i in sublist)) for sublist in self.Q)
-        return Q_as_str #+ "\n" + N_as_str
+        return Q_as_str + "\n" + N_as_str
+
+class FallInTheHoleABnPlay(rl.MABandit):
+    
+    def __init__(self, dimension, exits, traps, Q):
+        self.dimension = dimension
+        self.exits = exits
+        self.traps = traps
+        self.Q = Q
+        
+    def trapped(self, state):
+        return (state in self.traps)
+    
+    def victory(self, state):
+        return (state in self.exits)
+        
+    def play(self, start_state):
+        
+        state = start_state
+        
+        while True:
+            
+            if self.victory(state):
+                return 1
+            elif self.trapped(state):
+                return -1
+            else:
+               action = Action(self.get_next_play_action(state))
+               state = self.get_next_state(state, action)
+                
+                
+    def get_next_play_action(self, state):
+        
+        print(f"get_next_play_action -> state: {state}")
+        
+        action = None
+        
+        state_action = list(self.Q[state])
+        
+        print(f"get_next_play_action -> state_action: {state_action}")
+        
+        max_state_idx = max(state_action)
+        print(f"get_next_play_action -> max_state_idx: {max_state_idx}")
+         
+        action = state_action.index(max_state_idx)
+        print(f"get_next_play_action -> action: {action}")
+         
+        return action
+    
+    def get_next_state(self, state, action):
+        
+        if action == Action.FORWARD:
+            return state + self.dimension
+        elif action == Action.BACKWARD:
+            return state - self.dimension
+        elif action == Action.LEFT:
+            return state - 1
+        else:
+            return state + 1
+    
 
 def main():
     
@@ -151,7 +224,46 @@ def main():
     abn_model = rl.ABNModel(n_tests, bandit)
     abn_model.apply()
     
+    Q = bandit.get_Q()
+    
+    state_count = bandit.get_state_count()
+    exit_states = [0, state_count - 1]
+    trap_states = bandit.get_trap_states()
+    
+    allowed_states = list(set(list(range(state_count))) - set(trap_states))    
+    allowed_states.append('q')
+    allowed_states.append('Q')    
+    allowed_states = list(map(str, allowed_states))
+    
+    # print(allowed_states)
+    
+    player = FallInTheHoleABnPlay(dimension, exit_states, trap_states, Q)
+    
+    user_in = -1
+    
     print(bandit)
+    
+    while True:
+        
+        print(f"Enter a number between 1 and {state_count - 2} (but not {trap_states}). (To quit press q)")
+        
+        while user_in not in allowed_states:
+            if user_in != -1:
+                print(f"{user_in} is not allowed")
+            user_in = input()
+            
+        if user_in in ['Q', 'q']:
+            break
+        
+        state = int(user_in)
+               
+        print(f"Starting postion: {state}")
+        
+        player.play(int(user_in))
+        
+        user_in = -1
+    
+
 
 if __name__ == "__main__":
     main()
