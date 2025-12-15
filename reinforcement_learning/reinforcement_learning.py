@@ -4,7 +4,9 @@ Created on Fri Nov 28 17:56:14 2025
 
 @author: mthoma
 """
-class MABandit():    
+import abc
+
+class MABandit(abc.ABC):    
     def reward(self):
         """
         Is called to get the reward for the randomly selected action
@@ -19,7 +21,7 @@ class MABandit():
             the reward for the seletced action
 
         """
-        raise Exception("must be overwritten by subclass")
+        pass
         
     def pull(self):
         """
@@ -35,7 +37,7 @@ class MABandit():
         None.
 
         """
-        raise Exception("must be overwritten by subclass")
+        pass
         
     def increment_N(self):
         """
@@ -51,7 +53,7 @@ class MABandit():
             the new value of selection counter of the selected action
 
         """
-        raise Exception("must be overwritten by subclass")
+        pass
 
     def last_Q(self):
         '''
@@ -67,7 +69,7 @@ class MABandit():
             Q before this selection
 
         '''
-        raise Exception("must be overwritten by subclass")
+        pass
         
         
     def update_Q(self, Qnp1):
@@ -89,7 +91,7 @@ class MABandit():
         None.
 
         """
-        raise Exception("must be overwritten by subclass")
+        pass
         
     def is_round_over(self):
         """
@@ -104,7 +106,7 @@ class MABandit():
             DESCRIPTION.
 
         """
-        return True
+        pass
 
 class RLModel():
     

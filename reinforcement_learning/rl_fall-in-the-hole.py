@@ -5,11 +5,8 @@ Created on Mon Dec  1 13:55:15 2025
 @author: mthoma
 """
 import random
-import os
-import file_access as fa
+# import file_access as fa
 import time
-
-clear = lambda: os.system('cls')
 
 random.seed()
 
@@ -248,7 +245,7 @@ def trainings_data_to_file(data_as_list):
     
     file_name = f"./fall_in_the_hole_training_{time.time_ns()}.txt"
     
-    fa.write(file_name, data)    
+    # fa.write(file_name, data)    
     
     
             
@@ -261,6 +258,8 @@ def main():
     file_content.extend(play())
     
     trainings_data_to_file(file_content)
+    
+    print("\n".join((",".join(str(i) for i in sublist)) for sublist in quality))
    
 
 

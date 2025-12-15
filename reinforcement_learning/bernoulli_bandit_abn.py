@@ -56,6 +56,9 @@ class BernoulliMABandit(rl.MABandit):
         
         print(self.Q)
         return np.argmax(self.Q)
+    
+    def is_round_over(self):
+        return True
         
 def new_way():
     
