@@ -9,7 +9,10 @@ import pandas as pd
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import plotly.io as pio
-import scipy
+from scipy.optimize import minimize
+import cufflinks as cf
+cf.go_offline()
+cf.set_config_file(offline=False, world_readable=True)
 pio.renderers.default='browser'
 
 
@@ -41,9 +44,9 @@ class RegularizedLR(object):
         if y:
             X = np.array(X)
             y = np.array(y)
-            minimization = scipy.minimize(self.loss, 
+            minimization = minimize(self.loss, 
                                     self.w, args=(X,y), 
-                                    metod="L-BFGS-B", 
+                                    method="L-BFGS-B", 
                                     bounds = [(-10,10)]*3 + [(-1,1)], 
                                     options = {'maxiter':50})
             self.w = minimization.x
@@ -56,7 +59,7 @@ class RegularizedLR(object):
     
     def get_ucb(self, context):
         pred = self.calc_sigmoid(self.m, context)
-        confidence = self.alpha * np.sqrt(np.sum(np.devide(np.array(context)**2, self.q)))
+        confidence = self.alpha * np.sqrt(np.sum(np.divide(np.array(context)**2, self.q)))
         ucb = pred + confidence
         return ucb
     
@@ -67,12 +70,6 @@ class RegularizedLR(object):
         w = self.get_sampled_weights()
         return self.calc_sigmoid(w, context)
     
-    def calculate_regret(ug, context, ad_options, ad):
-        action_values = {a:ug.logistics(ug.beta[a], context) for a in ad_options}
-        best_action = max(action_values, key=action_values.get)
-        regret = action_values[best_action] - action_values[ad]
-        return regret, best_action
-
 class UserGenerator(object):
     def __init__(self):
         self.beta = {}
@@ -83,14 +80,14 @@ class UserGenerator(object):
         self.beta['E'] = np.array([-0.1, 0, 0.5, -0.01])
         self.context = None
         
-    def logistic(self, beta, context):
+    def logistics(self, beta, context):
         f = np.dot(beta, context)
         p = 1 / (1 + np.exp(-f))
         return p
     
     def display_ad(self, ad):
         if ad in ADDS:
-            p = self.logistic(self.beta[ad], self.context)
+            p = self.logistics(self.beta[ad], self.context)
             reward = np.random.binomial(n=1, p=p)
             return reward
         else:
@@ -103,7 +100,7 @@ class UserGenerator(object):
         device = np.random.binomial(n=1, p=0.8)
         # User age changes between 10 and 70
         # with mean age 34
-        age = 10 + int(np.random.beta((2,3)*60))
+        age = 10 + int(np.random.beta(2,3)*60)
         # Add 1 to the concept for the intercept
         self.context = [1, device, location, age]
         return self.context
@@ -132,13 +129,18 @@ def visualize_bandits(ug):
         for location in [0,1]:
             showlegend = (device == 0) and (location == 0)
             for ad in ad_list:
-                probs = [ug.logistic(ug.beta[ad],
+                probs = [ug.logistics(ug.beta[ad],
                          [1, device,location,age]) for age in ages]
                 
                 fig.add_trace(get_scatter(ages, probs, ad, showlegend),row=device+1, col=location+1)
     fig.update_layout(template='presentation')
     fig.show()
 
+def calculate_regret(ug, context, ad_options, ad):
+    action_values = {a:ug.logistics(ug.beta[a], context) for a in ad_options}
+    best_action = max(action_values, key=action_values.get)
+    regret = action_values[best_action] - action_values[ad]
+    return regret, best_action
 
 def select_ad_eps_greedy(ad_models, context, eps):
     if np.random.uniform() < eps:
@@ -148,8 +150,69 @@ def select_ad_eps_greedy(ad_models, context, eps):
         max_value = max(prediction.values())
         max_keys = [key for key, value in prediction.items() if value == max_value]
         return np.random.choice(max_keys)
-               
+
+def select_ad_ucb(ad_models, context):
+    ucbs = {ad: ad_models[ad].get_ucb(context) for ad in ad_models}
+    max_value = max(ucbs.values())
+    max_keys = [key for key, value in ucbs.items() if value == max_value]
+    return np.random.choice(max_keys)
+
+def select_add_thompson(ad_models, context):
+    samples = {ad: ad_models[ad].sample_prediction(context) for ad in ad_models}
+    max_value = max(samples.values())
+    max_keys = [key for key, value in samples.items() if value == max_value]
+    return np.random.choice(max_keys)
+           
+
 if __name__ == "__main__":
     ug = UserGenerator()
-    visualize_bandits(ug)
+    # visualize_bandits(ug)
+    
+    ad_options = ADDS
+    
+    exploration_data = {}
+    data_columns = ['context', 'add', 'click', 'best_action', 'regret', 'total_regret']
+    exploration_strategies = ['eps-greedy', 'ucb', 'Thompson']
+    
+    for strategy in exploration_strategies:
+        print("--- Now using", strategy)
+        np.random.seed(0)
+        # Create the LR models for each ad
+        alpha, rlambda, n_dim = 0.5, 0.5, 4
+        ad_models = {ad: RegularizedLR(ad, alpha, rlambda, n_dim) for ad in 'ABCDE'}
+        # Initialize data structure
+        X = {ad: [] for ad in ad_options}
+        y = {ad: [] for ad in ad_options}
+        results = []
+        total_regret = 0
+        for i in range(10**1):
+            context = ug.generate_user_with_context()
+            if strategy == 'eps-greedy':
+                eps = 0.1
+                ad = select_ad_eps_greedy(ad_models, context, eps)
+            elif strategy == 'ucb':
+                ad = select_ad_ucb(ad_models, context)
+            elif strategy == 'Thompson':
+                ad = select_add_thompson(ad_models, context)
+                
+            # display the selected ad
+            click = ug.display_ad(ad)
+            # Store the outcome
+            X[ad].append(context)
+            y[ad].append(click)
+            regret, best_action = calculate_regret(ug, context, ad_options, ad)
+            total_regret += regret
+            results.append((context, ad, click, best_action, regret, total_regret))
+            # Update the models with the latest batch of data
+            if(i + 1) % 500 == 0:
+                print("Updateing the models at i:", i + 1)
+                for ad in ad_options:
+                    ad_models[ad].fit(X[ad], y[ad])
+                X = {ad: [] for ad in ad_options}
+                y = {ad: [] for ad in ad_options}
+        exploration_data[strategy] = {'models':ad_models, 'results': pd.DataFrame(results, columns=data_columns)}
+        
+    df_regret_comparisons = pd.DataFrame({s: exploration_data[s]['results'].total_regret for s in exploration_strategies})
+    df_regret_comparisons.iplot(dash=['solid', 'dash', 'dot'], xTitle='Impressions', yTitle='Total Regret', color='#ff0000')
+        
                    
