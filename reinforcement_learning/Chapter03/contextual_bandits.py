@@ -9,11 +9,69 @@ import pandas as pd
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import plotly.io as pio
+import scipy
 pio.renderers.default='browser'
 
 
 ADDS = ['A', 'B', 'C', 'D', 'E']
 DASHMAP = {'A': 'solid', 'B': 'dot', 'C': 'dash', 'D': 'dashdot', 'E': 'longdash'}
+
+class RegularizedLR(object):
+    def __init__(self, name, alpha, rlambda, n_dim):
+        self.name = name
+        self.alpha = alpha
+        self.rlambda = rlambda
+        self.n_dim = n_dim
+        self.m = np.zeros(n_dim)
+        self.q = np.ones(n_dim) * rlambda
+        self.w = self.get_sampled_weights()
+        
+    def get_sampled_weights(self):
+        w = np.random.normal(self.m, self.alpha * self.q**(-1/2))
+        return w
+    
+    def loss(self, w, *args):
+        X, y = args
+        n = len(y)
+        regularizer = 0.5 * np.dot(self.q, (w - self.m)**2)
+        pred_loss = sum([np.log(1+np.exp(np.dot(w, X[j]))) - y[j] * np.dot(w, X[j]) for j in range(n)])
+        return regularizer + pred_loss
+                         
+    def fit(self, X, y):
+        if y:
+            X = np.array(X)
+            y = np.array(y)
+            minimization = scipy.minimize(self.loss, 
+                                    self.w, args=(X,y), 
+                                    metod="L-BFGS-B", 
+                                    bounds = [(-10,10)]*3 + [(-1,1)], 
+                                    options = {'maxiter':50})
+            self.w = minimization.x
+            self.m = self.w
+            p = (1 + np.exp(-np.matmul(self.w, X.T)))**(-1)
+            self.q = self.q + np.matmul(p * (1 - p), X**2)
+            
+    def calc_sigmoid(self, w, context):
+        return 1 / (1 + np.exp(-np.dot(w, context)))
+    
+    def get_ucb(self, context):
+        pred = self.calc_sigmoid(self.m, context)
+        confidence = self.alpha * np.sqrt(np.sum(np.devide(np.array(context)**2, self.q)))
+        ucb = pred + confidence
+        return ucb
+    
+    def get_prediction(self, context):
+        return self.calc_sigmoid(self.m, context)
+    
+    def sample_prediction(self, context):
+        w = self.get_sampled_weights()
+        return self.calc_sigmoid(w, context)
+    
+    def calculate_regret(ug, context, ad_options, ad):
+        action_values = {a:ug.logistics(ug.beta[a], context) for a in ad_options}
+        best_action = max(action_values, key=action_values.get)
+        regret = action_values[best_action] - action_values[ad]
+        return regret, best_action
 
 class UserGenerator(object):
     def __init__(self):
@@ -80,7 +138,17 @@ def visualize_bandits(ug):
                 fig.add_trace(get_scatter(ages, probs, ad, showlegend),row=device+1, col=location+1)
     fig.update_layout(template='presentation')
     fig.show()
-                
+
+
+def select_ad_eps_greedy(ad_models, context, eps):
+    if np.random.uniform() < eps:
+        return np.random.choice(list(ad_models.keys()))
+    else:
+        prediction = {ad: ad_models[ad].get_prediction(context) for ad in ad_models}
+        max_value = max(prediction.values())
+        max_keys = [key for key, value in prediction.items() if value == max_value]
+        return np.random.choice(max_keys)
+               
 if __name__ == "__main__":
     ug = UserGenerator()
     visualize_bandits(ug)
